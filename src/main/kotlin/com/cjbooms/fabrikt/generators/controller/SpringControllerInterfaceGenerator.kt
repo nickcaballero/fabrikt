@@ -15,6 +15,7 @@ import com.cjbooms.fabrikt.model.BodyParameter
 import com.cjbooms.fabrikt.model.ControllerLibraryType
 import com.cjbooms.fabrikt.model.ControllerType
 import com.cjbooms.fabrikt.model.HeaderParam
+import com.cjbooms.fabrikt.model.PlainParameter
 import com.cjbooms.fabrikt.model.KotlinTypeInfo
 import com.cjbooms.fabrikt.model.KotlinTypes
 import com.cjbooms.fabrikt.model.PathParam
@@ -112,6 +113,11 @@ class SpringControllerInterfaceGenerator(
                             .toParameterSpecBuilder()
                             .addValidationAnnotations(it)
                             .addSpringParamAnnotation(it)
+                            .build()
+
+                    is PlainParameter ->
+                        it
+                            .toParameterSpecBuilder()
                             .build()
                 }
             }

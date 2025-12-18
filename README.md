@@ -211,6 +211,7 @@ This section documents the available CLI parameters for controlling what gets ge
 |                               |   `AGGRESSIVE` - Referencing any schema in an external API file triggers generation of every external schema in that file. |
 |   `--http-client-opts`        | Select the options for the http client code that you want to be generated. |
 |                               | CHOOSE ANY OF: |
+|                               |   `EVENT_SOURCE` - This option returns an `EventSource` for SSE endpoints (only for OkHttp clients) |
 |                               |   `RESILIENCE4J` - Generates a fault tolerance service for the client using the following library "io.github.resilience4j:resilience4j-all:+" (only for OkHttp clients) |
 |                               |   `SUSPEND_MODIFIER` - This option adds the suspend modifier to the generated client functions (only for OpenFeign clients) |
 |                               |   `SPRING_RESPONSE_ENTITY_WRAPPER` - This option adds the Spring-ResponseEntity generic around the response to be able to get response headers and status (only for OpenFeign clients). |

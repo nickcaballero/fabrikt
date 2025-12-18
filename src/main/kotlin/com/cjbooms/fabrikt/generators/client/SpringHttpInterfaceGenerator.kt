@@ -68,7 +68,7 @@ class SpringHttpInterfaceGenerator(
         verb: String,
         options: Set<ClientCodeGenOptionType>,
     ): FunSpec {
-        val parameters = deriveClientParameters(path, operation, packages.base)
+        val parameters = deriveClientParameters(path, operation, packages.base, options)
         return FunSpec
             .builder(functionName(operation, resource, verb))
             .addModifiers(KModifier.ABSTRACT)

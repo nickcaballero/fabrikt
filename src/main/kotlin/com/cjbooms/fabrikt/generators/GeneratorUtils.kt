@@ -28,6 +28,7 @@ import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.asTypeName
 import java.util.function.Predicate
+import com.cjbooms.fabrikt.model.PlainParameter
 
 object GeneratorUtils {
     /**
@@ -123,6 +124,8 @@ object GeneratorUtils {
     private fun Schema.toClassName() = KotlinTypeInfo.from(this).modelKClass.asTypeName()
 
     fun String.toClassName(basePackage: String) = ClassName(packageName = basePackage, this)
+
+    fun String.toClassName(basePackage: ClassName) = ClassName(packageName = basePackage.canonicalName, this)
 
     fun RequestBody.getPrimaryContentMediaType(): Map.Entry<String, MediaType>? =
         this.contentMediaTypes.entries.firstOrNull()
@@ -229,6 +232,11 @@ object GeneratorUtils {
                     p.isRequired,
                     p.explode,
                     p.defaultValue,
+                )
+                is PlainParameter -> PlainParameter(
+                    "client_${p.oasName}".toKotlinParameterName(),
+                    p.description,
+                    p.type,
                 )
             }
         }

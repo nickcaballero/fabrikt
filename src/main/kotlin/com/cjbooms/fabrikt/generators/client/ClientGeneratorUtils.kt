@@ -29,6 +29,9 @@ import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.asTypeName
 import kotlin.reflect.KClass
+import com.cjbooms.fabrikt.generators.client.metadata.OkHttpImports
+import com.cjbooms.fabrikt.generators.controller.ControllerGeneratorUtils.isSseResponse
+import com.cjbooms.fabrikt.model.PlainParameter
 
 object ClientGeneratorUtils {
     const val ACCEPT_HEADER_NAME = "Accept"
@@ -66,15 +69,24 @@ object ClientGeneratorUtils {
         }
     }
 
-    fun Operation.toClientReturnType(packages: Packages): TypeName {
-        return "ApiResponse".toClassName(packages.client).parameterizedBy(getReturnType(packages))
+    fun Operation.toClientReturnType(packages: Packages, options: Set<ClientCodeGenOptionType>): TypeName {
+        return if (this.isSseResponse() && options.contains(ClientCodeGenOptionType.EVENT_SOURCE)) {
+            OkHttpImports.EVENT_SOURCE
+        } else {
+            "ApiResponse".toClassName(packages.client).parameterizedBy(getReturnType(packages))
+        }
     }
 
     fun simpleClientName(resourceName: String) = "$resourceName${ClientType.SIMPLE_CLIENT_SUFFIX}"
 
     fun enhancedClientName(resourceName: String) = "$resourceName${ClientType.ENHANCED_CLIENT_SUFFIX}"
 
-    fun deriveClientParameters(path: Path, operation: Operation, basePackage: String): List<IncomingParameter> {
+    fun deriveClientParameters(
+        path: Path,
+        operation: Operation,
+        basePackage: String,
+        options: Set<ClientCodeGenOptionType>
+    ): List<IncomingParameter> {
         fun needsAcceptHeaderParameter(path: Path, operation: Operation): Boolean {
             val hasAcceptParameter = GeneratorUtils.mergeParameters(path.parameters, operation.parameters)
                 .any { parameter ->
@@ -86,8 +98,10 @@ object ClientGeneratorUtils {
             return operation.hasMultipleContentMediaTypes() == true && !hasAcceptParameter
         }
 
-        val extra = if (needsAcceptHeaderParameter(path, operation)) listOf(
-            RequestParameter(
+        val extra: MutableList<IncomingParameter> = mutableListOf()
+
+        if (needsAcceptHeaderParameter(path, operation)) {
+            extra += RequestParameter(
                 oasName = ACCEPT_HEADER_VARIABLE_NAME,
                 description = null,
                 type = toModelType(basePackage, KotlinTypeInfo.Text, false),
@@ -99,12 +113,20 @@ object ClientGeneratorUtils {
                 isRequired = true,
                 defaultValue = operation.getPrimaryContentMediaTypeKey(),
             )
-        ) else emptyList()
+        }
+
+        if (operation.isSseResponse() && options.contains(ClientCodeGenOptionType.EVENT_SOURCE)) {
+            extra += PlainParameter(
+                oasName = "eventSourceListener",
+                description = "Listener for Server-Sent Events",
+                type = OkHttpImports.EVENT_SOURCE_LISTENER,
+            )
+        }
 
         return operation.toIncomingParameters(
             basePackage,
             path.parameters,
-            extra,
+            extra
         )
     }
 

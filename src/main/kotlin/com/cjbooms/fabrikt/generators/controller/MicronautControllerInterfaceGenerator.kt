@@ -16,6 +16,7 @@ import com.cjbooms.fabrikt.model.BodyParameter
 import com.cjbooms.fabrikt.model.ControllerLibraryType
 import com.cjbooms.fabrikt.model.ControllerType
 import com.cjbooms.fabrikt.model.HeaderParam
+import com.cjbooms.fabrikt.model.PlainParameter
 import com.cjbooms.fabrikt.model.KotlinTypes
 import com.cjbooms.fabrikt.model.PathParam
 import com.cjbooms.fabrikt.model.QueryParam
@@ -110,6 +111,11 @@ class MicronautControllerInterfaceGenerator(
                             .toParameterSpecBuilder()
                             .addValidationAnnotations(it)
                             .addMicronautParamAnnotation(it)
+                            .build()
+
+                    is PlainParameter ->
+                        it
+                            .toParameterSpecBuilder()
                             .build()
                 }
             }

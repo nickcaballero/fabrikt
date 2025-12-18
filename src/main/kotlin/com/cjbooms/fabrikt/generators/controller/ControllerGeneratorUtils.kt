@@ -30,6 +30,10 @@ object ControllerGeneratorUtils {
 
     fun Operation.isSseResponse(): Boolean {
         val responseDetails = happyPathResponseObject()
+        if (responseDetails.contentMediaTypes.size > 1) {
+            return false
+        }
+
         return responseDetails.contentMediaTypes["text/event-stream"]
             ?.let { it.schema.type == "array" && it.schema.format == "event-stream" }
             ?: false

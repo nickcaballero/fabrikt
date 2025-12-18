@@ -42,14 +42,14 @@ class OkHttpEnhancedClientGenerator(
 
     fun generateDynamicClientCode(options: Set<ClientCodeGenOptionType>): Collection<ClientType> =
         options.ifResilience4jIsEnabled {
-            generateResilience4jClientCode()
+            generateResilience4jClientCode(options)
         }
 
-    private fun generateResilience4jClientCode(): Collection<ClientType> {
+    private fun generateResilience4jClientCode(options: Set<ClientCodeGenOptionType>): Collection<ClientType> {
         return api.openApi3.routeToPaths().map { (resourceName, paths) ->
             val funSpecs: List<FunSpec> = paths.flatMap { (resource, path) ->
                 path.operations.map { (verb, operation) ->
-                    val parameters = deriveClientParameters(path, operation, packages.base)
+                    val parameters = deriveClientParameters(path, operation, packages.base, options)
                     FunSpec
                         .builder(functionName(operation, resource, verb))
                         .addModifiers(KModifier.PUBLIC)
@@ -75,7 +75,7 @@ class OkHttpEnhancedClientGenerator(
                                 parameters,
                             ).toStatement()
                         )
-                        .returns(operation.toClientReturnType(packages))
+                        .returns(operation.toClientReturnType(packages, options))
                         .build()
                 }
             }

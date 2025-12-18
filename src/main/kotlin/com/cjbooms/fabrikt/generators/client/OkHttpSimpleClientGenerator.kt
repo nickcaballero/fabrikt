@@ -40,19 +40,21 @@ import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.asTypeName
 import java.nio.file.Path
+import com.cjbooms.fabrikt.cli.ClientCodeGenOptionType
+import com.cjbooms.fabrikt.generators.client.metadata.OkHttpImports
+import com.cjbooms.fabrikt.generators.controller.ControllerGeneratorUtils.isSseResponse
 import com.cjbooms.fabrikt.util.toUpperCase
-import com.squareup.kotlinpoet.TypeName
 
 class OkHttpSimpleClientGenerator(
     private val packages: Packages,
     private val api: SourceApi,
     private val srcPath: Path = Destinations.MAIN_KT_SOURCE
 ) {
-    fun generateDynamicClientCode(): Collection<ClientType> {
+    fun generateDynamicClientCode(options: Set<ClientCodeGenOptionType> = setOf()): Collection<ClientType> {
         return api.openApi3.routeToPaths().map { (resourceName, paths) ->
             val funcSpecs: List<FunSpec> = paths.flatMap { (resource, path) ->
                 path.operations.map { (verb, operation) ->
-                    val parameters = deriveClientParameters(path, operation, packages.base)
+                    val parameters = deriveClientParameters(path, operation, packages.base, options)
                     FunSpec
                         .builder(functionName(operation, resource, verb))
                         .addModifiers(KModifier.PUBLIC)
@@ -85,9 +87,10 @@ class OkHttpSimpleClientGenerator(
                                 verb,
                                 operation,
                                 parameters,
+                                options
                             ).toStatement()
                         )
-                        .returns(operation.toClientReturnType(packages))
+                        .returns(operation.toClientReturnType(packages, options))
                         .build()
                 }
             }
@@ -96,7 +99,7 @@ class OkHttpSimpleClientGenerator(
                 .primaryPropertiesConstructor(
                     PropertySpec.builder("objectMapper", ObjectMapper::class.asTypeName(), KModifier.PRIVATE).build(),
                     PropertySpec.builder("baseUrl", String::class.asTypeName(), KModifier.PRIVATE).build(),
-                    PropertySpec.builder("okHttpClient", "OkHttpClient".toClassName("okhttp3"), KModifier.PRIVATE).build()
+                    PropertySpec.builder("okHttpClient", OkHttpImports.CLIENT, KModifier.PRIVATE).build()
                 )
                 .addAnnotation(AnnotationSpec.builder(Suppress::class).addMember("%S", "unused").build())
                 .addFunctions(funcSpecs)
@@ -137,7 +140,8 @@ data class SimpleClientOperationStatement(
     private val resource: String,
     private val verb: String,
     private val operation: Operation,
-    private val parameters: List<IncomingParameter>
+    private val parameters: List<IncomingParameter>,
+    private val options: Set<ClientCodeGenOptionType>
 ) {
     fun toStatement(): CodeBlock =
         CodeBlock.builder()
@@ -150,7 +154,7 @@ data class SimpleClientOperationStatement(
             .build()
 
     private fun CodeBlock.Builder.addUrlStatement(): CodeBlock.Builder {
-        this.add("val httpUrl: %T = \"%L\"", "HttpUrl".toClassName("okhttp3"), "\$baseUrl$resource")
+        this.add("val httpUrl: %T = \"%L\"", OkHttpImports.HTTP_URL, "\$baseUrl$resource")
         return this
     }
 
@@ -162,7 +166,7 @@ data class SimpleClientOperationStatement(
                 this.add("\n.pathParam(%S to %N)", "{${it.originalName}}", it.name)
             }
 
-        this.add("\n.%T()\n.newBuilder()", "toHttpUrl".toClassName("okhttp3.HttpUrl.Companion"))
+        this.add("\n.%T()\n.newBuilder()", "toHttpUrl".toClassName(OkHttpImports.HTTP_URL_COMPANION))
         return this
     }
 
@@ -210,11 +214,11 @@ data class SimpleClientOperationStatement(
             }
         this.add("\nadditionalHeaders.forEach { headerBuilder.header(it.key, it.value) }")
 
-        return this.add("\nval httpHeaders: %T = headerBuilder.build()\n", "Headers".toClassName("okhttp3"))
+        return this.add("\nval httpHeaders: %T = headerBuilder.build()\n", OkHttpImports.HEADERS)
     }
 
     private fun CodeBlock.Builder.addRequestStatement(): CodeBlock.Builder {
-        this.add("\nval request: %T = Request.Builder()", "Request".toClassName("okhttp3"))
+        this.add("\nval request: %T = Request.Builder()", OkHttpImports.REQUEST)
         this.add("\n.url(httpUrl)\n.headers(httpHeaders)")
         when (val op = verb.toUpperCase()) {
             "PUT" -> this.addRequestSerializerStatement("put")
@@ -228,17 +232,25 @@ data class SimpleClientOperationStatement(
         return this.add("\n.build()\n")
     }
 
-    private fun CodeBlock.Builder.addRequestExecutionStatement() =
-        when (operation.getReturnType()) {
+    private fun CodeBlock.Builder.addRequestExecutionStatement(): CodeBlock.Builder {
+        if (operation.isSseResponse() && options.contains(ClientCodeGenOptionType.EVENT_SOURCE)) {
+            return this.add(
+                "\nreturn %T.createFactory(okHttpClient).newEventSource(request, eventListener)",
+                OkHttpImports.EVENT_SOURCES
+            )
+        }
+
+        return when (operation.getReturnType()) {
             is KotlinTypeInfo.ByteArray ->
                 this.add("\nreturn request.execute(okHttpClient)\n")
             else ->
                 this.add("\nreturn request.execute(okHttpClient, objectMapper, jacksonTypeRef())\n")
         }
+    }
 
     private fun CodeBlock.Builder.addRequestSerializerStatement(verb: String) {
         val requestBody = operation.requestBody
-        val toRequestBody = "toRequestBody".toClassName("okhttp3.RequestBody.Companion")
+        val toRequestBody = "toRequestBody".toClassName(OkHttpImports.REQUEST_BODY_COMPANION)
         parameters.filterIsInstance<BodyParameter>().firstOrNull()?.let {
             this.add(
                 "\n.%N(objectMapper.writeValueAsString(%N).%T(%S.%T()))",
@@ -246,7 +258,7 @@ data class SimpleClientOperationStatement(
                 it.name,
                 toRequestBody,
                 requestBody.getPrimaryContentMediaType()?.key,
-                "toMediaType".toClassName("okhttp3.MediaType.Companion")
+                "toMediaType".toClassName(OkHttpImports.MEDIA_TYPE_COMPANION)
             )
         } ?: this.add("\n.%N(ByteArray(0).%T())", verb, toRequestBody)
     }

@@ -118,3 +118,9 @@ class RequestParameter(
             )
         } else super.toParameterSpecBuilder(treatAnyTypeHeadersAsStrings)
 }
+
+class PlainParameter(
+    oasName: String,
+    description: String?,
+    type: TypeName,
+) : IncomingParameter(oasName, description, type)

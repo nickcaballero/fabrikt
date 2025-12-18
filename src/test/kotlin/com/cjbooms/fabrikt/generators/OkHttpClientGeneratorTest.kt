@@ -187,4 +187,36 @@ class OkHttpClientGeneratorTest {
 
         assertThat(content).isEqualTo(expectedClient)
     }
+
+    @Test
+    fun `correct api client and service is generated for sse`() {
+        val packages = Packages("examples.sse")
+        val apiLocation = javaClass.getResource("/examples/okHttpClientSse/api.yaml")!!
+        val sourceApi = SourceApi(apiLocation.readText(), baseDir = Paths.get(apiLocation.toURI()))
+
+        val expectedModel = "/examples/okHttpClientSse/models/ClientModels.kt"
+        val expectedClient = "/examples/okHttpClientSse/client/ApiClient.kt"
+        val expectedClientCode = "/examples/okHttpClientSse/client/ApiService.kt"
+
+        val models = ModelGenerator(
+            packages,
+            sourceApi,
+        ).generate().toSingleFile()
+        val generator =
+            OkHttpEnhancedClientGenerator(packages, sourceApi)
+        val options = setOf(ClientCodeGenOptionType.EVENT_SOURCE, ClientCodeGenOptionType.RESILIENCE4J)
+        val simpleClientCode = OkHttpSimpleClientGenerator(
+            packages,
+            sourceApi
+        )
+            .generateDynamicClientCode(options)
+            .toSingleFile()
+        val enhancedClientCode = generator
+            .generateDynamicClientCode(options)
+            .toSingleFile()
+
+        assertThatGenerated(models).isEqualTo(expectedModel)
+        assertThatGenerated(simpleClientCode).isEqualTo(expectedClient)
+        assertThatGenerated(enhancedClientCode).isEqualTo(expectedClientCode)
+    }
 }
